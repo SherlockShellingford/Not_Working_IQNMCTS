@@ -127,10 +127,7 @@ class TreeNode(object):
             v: A float representing the network value of this state.
         """
         self.Nsa += 1
-        if wsa==0:
-            self.Wsa +=  v
-        else:
-            self.Wsa += wsa
+        self.Wsa=wsa+v
         self.Qsa = self.Wsa / self.Nsa
 
 
