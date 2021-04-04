@@ -121,8 +121,10 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
     Returns:
       _network_type object containing quantile value outputs of the network.
     """
+    
+    self.training = tf.placeholder_with_default(False, ())
     return self.network(self.num_actions, self.quantile_embedding_dim,
-                        self._get_network_type(), state, num_quantiles, not self.eval_mode)
+                        self._get_network_type(), state, num_quantiles, self.training)
 
 
   def get_relevant_qvalues_index(self, value,b): #CHANGE
@@ -145,7 +147,7 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
     # have been run. This matches the Nature DQN behaviour.
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
-        x, y, z=self._sess.run(self._train_op)
+        x, y, z=self._sess.run(self._train_op, {self.training : True})
         if (self.summary_writer is not None and
             self.training_steps > 0 and
             self.training_steps % self.summary_writing_frequency == 0):
