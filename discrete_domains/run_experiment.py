@@ -1,5 +1,3 @@
-# coding=utf-8
-# Copyright 2018 The Dopamine Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -193,7 +191,7 @@ class Runner(object):
     #self._summary_writer = tf.contrib.summary.FileWriter(self._base_dir) CHANGE
     self.testing = False
     self.opponent=TDAgent('X',0,0)
-    self.PATH='/home/neriait/Newest_IQN/dopamine/discrete_domains/'
+    self.PATH='/home/neriait/Newest_IQN_Old/dopamine/discrete_domains/'
     self.opponent.load_model(self.PATH + 'tictactoe/examples/mirai')
     if 'sticky' in runtype:
         self.sticky_actions = True
@@ -426,6 +424,7 @@ class Runner(object):
     first_time=True
     while True:
     #Player1
+    
       originalobservation2=observation2
       observation2=self.observation_to_tensorlike(observation2)
       if run_mode_str=='evalrandom':
@@ -435,18 +434,18 @@ class Runner(object):
       elif run_mode_str=='eval':
         self._agent.eval_mode=True
         if count < CFG.temp_thresh:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final,self.traceMCTS)
         else:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final,self.traceMCTS)
         action = best_child.action
         pi2=deepcopy(best_child.parent.child_psas)
         observation, reward, is_terminal = self._run_one_step(action) 
       elif run_mode_str=='trainrandom':
         self._agent.eval_mode=False
         if count < CFG.temp_thresh:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init,self.traceMCTS)
         else:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init,self.traceMCTS)
         
         action = best_child.action
         pi2=deepcopy(best_child.parent.child_psas)
@@ -455,9 +454,9 @@ class Runner(object):
         self._agent.eval_mode=False
         
         if count < CFG.temp_thresh:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init,self.traceMCTS)
         else:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init,self.traceMCTS)
         
         action = best_child.action
         pi2=deepcopy(best_child.parent.child_psas)
@@ -466,9 +465,9 @@ class Runner(object):
       elif run_mode_str=='train2':
         self._agent.eval_mode=True
         if count < CFG.temp_thresh:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final,self.traceMCTS)
         else:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final,self.traceMCTS)
         action = best_child.action
         pi2=deepcopy(best_child.parent.child_psas)
         observation, reward, is_terminal = self._run_one_step(action) 
@@ -478,6 +477,8 @@ class Runner(object):
         action = self._agent.get_action_from_observation(observation2)
         observation, reward, is_terminal = self._run_one_step(action) 
       node=best_child
+      if self.traceMCTS:
+        print("COURSE OF THE GAME:", [observation2,reward,is_terminal,action, pi2])
       observationbeforefirstplayeraction=observation2
       originalobservation=observation
       observation=self.observation_to_tensorlike(observation)
@@ -486,9 +487,9 @@ class Runner(object):
         if run_mode_str=='train1':
           self._agent.eval_mode=True
           if count < CFG.temp_thresh:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init)
           else:
-                best_child = mcts.searchWrap(self._environment, node, CFG.temp_final)
+                best_child = mcts.searchWrap(self._environment, node, CFG.temp_init)
           action2 = best_child.action
           pi=deepcopy(best_child.parent.child_psas)
           observation2, reward2, is_terminal = self._run_one_step(action2) 
@@ -521,6 +522,7 @@ class Runner(object):
           observation2, reward2, is_terminal = self._run_one_step(action2)
         node=best_child
         reward=reward+reward2
+        
         gameopponent.append([observation,-reward, is_terminal,action2, pi])
         gameplayer.append([observationbeforefirstplayeraction,reward,is_terminal,action, pi2])
       
@@ -534,10 +536,12 @@ class Runner(object):
       first_time=False
       # Perform reward clipping.
       reward = np.clip(reward, -1, 1)
+      
       if (is_terminal or
           step_number == self._max_steps_per_episode):
         # Stop the run loop once we reach the true end of episode.
         break
+    
     
     if run_mode_str=='trainrandom':
       for item in gameplayer:
@@ -572,7 +576,7 @@ class Runner(object):
     step_count = 0
     num_episodes = 0
     sum_returns = 0.
-    
+    self.traceMCTS=False
     while step_count < min_steps:
       start_time = time.time()
       episode_length, episode_return, self.gameplayer, self.gameopponent = self._run_one_episode(run_mode_str)
@@ -594,6 +598,8 @@ class Runner(object):
                        'Average time one episode: {}\r'.format(episode_length/time_delta))
       sys.stdout.flush()
       print("Phase count:", step_count)
+    self.traceMCTS=True
+    episode_length, episode_return, self.gameplayer, self.gameopponent = self._run_one_episode(run_mode_str)
     if run_mode_str!='evalrandom' or run_mode_str!='train':
       for item in self.gameplayer:
         print(item)
@@ -715,10 +721,12 @@ class Runner(object):
     
     q_argmax2 = self._agent._sess.run(self._agent._q_values, {self._agent.state_ph: [[[[0],[0],[0],[0],[0],[0],[0],[0],[0]]]], self._agent.validmoves_ph:
        
-         [1,3,5,7,8]})
+         [0,1,2,3,4,5,6,7,8]})
          
-    #print("Q Before loading", q_argmax2)
-    
+    print("Q Before loading", q_argmax2)
+    pi, v= self._agent.predict_all(((0,0,0,0,0,0,0,0,0),  'O' ), 0)
+    print("PI Initial:", pi)
+    print("V Initial:", v)
     
     
     

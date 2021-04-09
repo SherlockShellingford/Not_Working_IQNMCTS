@@ -23,7 +23,7 @@
 # ==============================================================================
 """Classes for Monte Carlo Tree Search."""
 import math
-
+import random
 import numpy as np
 
 from dopamine.discrete_domains.CGF import CFG
@@ -48,6 +48,7 @@ class TreeNode(object):
         self.Nsa = 0
         self.Wsa = 0.0
         self.Qsa = 0.0
+        self.predicted_value = 0.0
         self.game_state="NO GAME STATE"
         self.Psa = psa
         self.action = action
@@ -120,14 +121,14 @@ class TreeNode(object):
         self.children.append(child_node)
         return child_node
 
-    def back_prop(self, wsa, v):
+    def back_prop(self, v):
         """Update the current node's statistics based on the game outcome.
         Args:
             wsa: A float representing the action value for this state.
             v: A float representing the network value of this state.
         """
         self.Nsa += 1
-        self.Wsa=wsa+v
+        self.Wsa+=(v)
         self.Qsa = self.Wsa / self.Nsa
 
 
@@ -151,7 +152,7 @@ class MonteCarloTreeSearch(object):
     def int_action_to_array_action(self, action):
         return (1,((int)(action/3)),action%3)
 
-    def search(self, game, node, temperature):
+    def search(self, game, node, temperature, trace=False):
         """MCTS loop to get the best move which can be played at a given state.
         Args:
             game: An object containing the game state.
@@ -172,71 +173,94 @@ class MonteCarloTreeSearch(object):
             while node.is_not_leaf():
                 node = node.select_child()
                 previous_game_state=game._get_obs()
+                
                 #print(space+"GAME STATE:", game._get_obs())
                 #print(space+"ACTION BEFORE:", node.action)
                 #print(space+"ACTION AFTER:", self.array_action_to_int_action(node.action) )
                 game.play_action(self.array_action_to_int_action(node.action))
                 #space=space+"   "
-
+            
             # Get move probabilities and values from the network for this state.
             node.game_state=game._get_obs()            
+            
+            
             psa_vector, _ = self.net.predict(game._get_obs(), 0)
-            if previous_game_state!=None:
-                _, v=self.net.predict(previous_game_state, self.array_action_to_int_action(node.action))
-            else:
-                v=0
-            # Add Dirichlet noise to the psa_vector of the root node.
-            if node.parent is None:
-                psa_vector = self.add_dirichlet_noise(game, psa_vector)
-
-            valid_moves = game.get_valid_moves(game.current_player)
-            
-            
-            for idx, move in enumerate(valid_moves):
-                if move[0] is 0:
-                    psa_vector[idx] = 0
-
-            psa_vector_sum = sum(psa_vector)
-            # Renormalize psa vector
-            if psa_vector_sum > 0:
-                psa_vector /= psa_vector_sum
-
-            # Try expanding the current node.
-            
-            node.expand_node(game=game, psa_vector=psa_vector)
-
             game_over, wsa = game.check_game_over(game.current_player)
+            if not game_over:
+            
+              if previous_game_state!=None:
+                _, v=self.net.predict(previous_game_state, self.array_action_to_int_action(node.action))
+                    
+              else:
+                  v=0  
+                
+              node.predicted_value=v
+              # Add Dirichlet noise to the psa_vector of the root node.
+              if node.parent is None:
+                  psa_vector = self.add_dirichlet_noise(game, psa_vector)
+
+              valid_moves = game.get_valid_moves(game.current_player)
+            
+            
+              for idx, move in enumerate(valid_moves):
+                  if move[0] is 0:
+                      psa_vector[idx] = 0
+
+              psa_vector_sum = sum(psa_vector)
+              # Renormalize psa vector
+              if psa_vector_sum > 0:
+                  psa_vector /= psa_vector_sum
+
+              # Try expanding the current node.
+              node.expand_node(game=game, psa_vector=psa_vector)
+
+            else:
+              if wsa!=0:
+                v=1
+              else:
+                v=0  
+            
             # Back propagate node statistics up to the root node.
             while node is not None:
-                wsa = -wsa
-                v = -v
-                node.back_prop(wsa, v)
+                
+                node.back_prop(v)
                 node = node.parent
+                v = -v
 
         highest_nsa = 0
         highest_index = 0
-
+        all_p=[]
+        indices=[]
         # Select the child's move using a temperature parameter.
         for idx, child in enumerate(self.root.children):
             temperature_exponent = int(1 / temperature)
-
-            if child.Nsa ** temperature_exponent > highest_nsa:
+            nexp = child.Nsa ** temperature_exponent
+            all_p.append(nexp)
+            indices.append(idx)
+            if nexp > highest_nsa:
                 highest_nsa = child.Nsa ** temperature_exponent
                 highest_index = idx
+        
+        if trace:
+          self.printTree(self.root)
+        
+        
+        
+        return self.root.children[random.choices(population=indices, weights=all_p,k=1)[0]]
 
-        return self.root.children[highest_index]
-
-    def printTree(self, game, node, space=""):
+    def printTree(self, node, space=""):
         for child in node.children:
             print(space + "State:", child.game_state)
             print(space + "QSA:", child.Qsa)
             print(space + "NSA:", child.Nsa)
-            self.printTree(game, child, space+"   ")
+            print(space + "Predicted Value:", child.predicted_value)
+            self.printTree(child, space+"   ")
 
-    def searchWrap(self, game, node, temperature):
-        ret= self.search(game, node, temperature)
+    def searchWrap(self, game, node, temperature, trace=False):
+        ret= self.search(game, node, temperature, trace)
         ret.action=self.array_action_to_int_action(ret.action)
         return ret
+
 
     def add_dirichlet_noise(self, game, psa_vector):
         """Add Dirichlet noise to the psa_vector of the root node.
