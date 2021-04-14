@@ -462,18 +462,19 @@ class RainbowAgent(dqn_agent.DQNAgent):
     return a
 
   def predict(self, state, action):
-    q_values, pi = self._sess.run([self._q_values, self.pi], {self.state_ph: self.state})
+    q_values, pi, midv = self._sess.run([self._q_values, self.pi,self.midv], {self.state_ph: self.state})
     maxv=max(q_values)
-    if maxv>1:
-      q_values=[item/maxv for item in q_values]
+    #if maxv>1:
+    #  q_values=[item/maxv for item in q_values]
     
     v=q_values[action]
-    return pi[0], v
+    halfv=midv[0][action]
+    return pi[0], v, halfv
   
   def predict_all(self, state, action):
-    q_values, pi = self._sess.run([self._q_values, self.pi], {self.state_ph: self.state})
+    q_values, pi, midv = self._sess.run([self._q_values, self.pi, self.midv], {self.state_ph: self.state})
     v=q_values[action]
-    return pi[0], q_values  
+    return pi[0], q_values, midv[0]  
 
   def _build_target_distribution(self, q_support=None):
     """Builds the C51 target distribution as per Bellemare et al. (2017).

@@ -49,6 +49,7 @@ class TreeNode(object):
         self.Wsa = 0.0
         self.Qsa = 0.0
         self.predicted_value = 0.0
+        self.half_predicted_value=0.0
         self.game_state="NO GAME STATE"
         self.Psa = psa
         self.action = action
@@ -131,6 +132,9 @@ class TreeNode(object):
         self.Wsa+=(v)
         self.Qsa = self.Wsa / self.Nsa
 
+class Container():
+    def __init__(self, ac):
+      self.action=(1,((int)(ac/3)),ac%3)
 
 class MonteCarloTreeSearch(object):
     """Represents a Monte Carlo Tree Search Algorithm.
@@ -152,6 +156,18 @@ class MonteCarloTreeSearch(object):
     def int_action_to_array_action(self, action):
         return (1,((int)(action/3)),action%3)
 
+    def weighted_choice(self, objects, weights):
+      weights = np.array(weights, dtype=np.float64)
+      sum_of_weights = weights.sum()
+      # standardization:
+      np.multiply(weights, 1 / sum_of_weights, weights)
+      weights = weights.cumsum()
+      x = random.random()
+      for i in range(len(weights)):
+        if x < weights[i]:
+            return objects[i]
+
+
     def search(self, game, node, temperature, trace=False):
         """MCTS loop to get the best move which can be played at a given state.
         Args:
@@ -161,6 +177,8 @@ class MonteCarloTreeSearch(object):
         Returns:
             A child node representing the best move to play at this state.
         """
+        
+        
         self.root = node
         self.game = game
         self.root.game_state=game._get_obs()
@@ -184,17 +202,19 @@ class MonteCarloTreeSearch(object):
             node.game_state=game._get_obs()            
             
             
-            psa_vector, _ = self.net.predict(game._get_obs(), 0)
+            psa_vector, _, _ = self.net.predict(game._get_obs(), 0)
             game_over, wsa = game.check_game_over(game.current_player)
+            midv=0
             if not game_over:
             
               if previous_game_state!=None:
-                _, v=self.net.predict(previous_game_state, self.array_action_to_int_action(node.action))
+                _, v, midv=self.net.predict(previous_game_state, self.array_action_to_int_action(node.action))
                     
               else:
                   v=0  
                 
               node.predicted_value=v
+              node.half_predicted_value=midv
               # Add Dirichlet noise to the psa_vector of the root node.
               if node.parent is None:
                   psa_vector = self.add_dirichlet_noise(game, psa_vector)
@@ -221,6 +241,7 @@ class MonteCarloTreeSearch(object):
                 v=0  
             
             # Back propagate node statistics up to the root node.
+        
             while node is not None:
                 
                 node.back_prop(v)
@@ -230,30 +251,41 @@ class MonteCarloTreeSearch(object):
         highest_nsa = 0
         highest_index = 0
         all_p=[]
-        indices=[]
+        nonzerochildren=[]
         # Select the child's move using a temperature parameter.
         for idx, child in enumerate(self.root.children):
             temperature_exponent = int(1 / temperature)
             nexp = child.Nsa ** temperature_exponent
-            all_p.append(nexp)
-            indices.append(idx)
+            if child.Nsa > 0:
+              all_p.append(nexp)
+              nonzerochildren.append(child)
             if nexp > highest_nsa:
-                highest_nsa = child.Nsa ** temperature_exponent
+                highest_nsa = nexp
                 highest_index = idx
+        
+        finalprobabilities=[item/highest_nsa for item in all_p]
+        
+        chosen_child=self.weighted_choice(nonzerochildren, finalprobabilities)
         
         if trace:
           self.printTree(self.root)
+          print("FINAL PROBABILITIES:")
+          for i in range(0, len(finalprobabilities)):
+            print("(Index, probability):",(nonzerochildren[i].action, finalprobabilities[i]))
+          print("Chosen Child Action:",chosen_child.action)
+          for idx, child in enumerate(nonzerochildren):
+            print("<Index, Action>:", (idx, child.action))
         
-        
-        
-        return self.root.children[random.choices(population=indices, weights=all_p,k=1)[0]]
+        return chosen_child
 
+    
     def printTree(self, node, space=""):
         for child in node.children:
             print(space + "State:", child.game_state)
             print(space + "QSA:", child.Qsa)
             print(space + "NSA:", child.Nsa)
             print(space + "Predicted Value:", child.predicted_value)
+            #print(space + "Halfway Value:", child.half_predicted_value)
             self.printTree(child, space+"   ")
 
     def searchWrap(self, game, node, temperature, trace=False):

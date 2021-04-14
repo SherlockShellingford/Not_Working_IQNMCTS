@@ -262,10 +262,11 @@ class Runner(object):
     self._start_iteration = 0
     # Check if checkpoint exists. Note that the existence of checkpoint 0 means
     # that we have finished iteration 0 (so we will start from iteration 1).
+    return 5
+    
     latest_checkpoint_version = checkpointer.get_latest_checkpoint_number(
         self.PATH + "checkpoints")
     print("Latest version:",latest_checkpoint_version)
-    return 5
     if latest_checkpoint_version >= 0:
       experiment_data = self._checkpointer.load_checkpoint(
           latest_checkpoint_version)
@@ -601,7 +602,11 @@ class Runner(object):
     self.traceMCTS=True
     episode_length, episode_return, self.gameplayer, self.gameopponent = self._run_one_episode(run_mode_str)
     if run_mode_str!='evalrandom' or run_mode_str!='train':
+      print("PLAYER")
       for item in self.gameplayer:
+        print(item)
+      print("OPPONENT")
+      for item in self.gameopponent:
         print(item)
     return step_count, sum_returns, num_episodes
 
@@ -724,9 +729,10 @@ class Runner(object):
          [0,1,2,3,4,5,6,7,8]})
          
     print("Q Before loading", q_argmax2)
-    pi, v= self._agent.predict_all(((0,0,0,0,0,0,0,0,0),  'O' ), 0)
+    pi, v, midv= self._agent.predict_all(((0,0,0,0,0,0,0,0,0),  'O' ), 0)
     print("PI Initial:", pi)
     print("V Initial:", v)
+    print("MidV Initial:", midv)
     
     
     
@@ -866,11 +872,11 @@ class Runner(object):
       tf.logging.warning('num_iterations (%d) < start_iteration(%d)',
                          self._num_iterations, self._start_iteration)
       return
-    self._delete_everything_in_folder(self.PATH + "player2")
-    self._delete_everything_in_folder(self.PATH + "latest1")
-    self._delete_everything_in_folder(self.PATH + "latest2")
-    self._delete_everything_in_folder(self.PATH + "latest3")
-    self._delete_everything_in_folder(self.PATH + "latest4")
+    #self._delete_everything_in_folder(self.PATH + "player2")
+    #self._delete_everything_in_folder(self.PATH + "latest1")
+    #self._delete_everything_in_folder(self.PATH + "latest2")
+    #self._delete_everything_in_folder(self.PATH + "latest3")
+    #self._delete_everything_in_folder(self.PATH + "latest4")
     self.counter=0
     self.evalwhoamiplaying=1
     self.latest1=0

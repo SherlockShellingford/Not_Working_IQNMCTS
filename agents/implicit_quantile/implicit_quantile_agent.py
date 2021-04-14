@@ -180,7 +180,7 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
 
     # Compute the Q-values which are used for action selection in the current
     # state.
-    self._net_outputs, self.pi = self.online_convnet(self.state_ph,
+    self._net_outputs, self.pi, self.midv = self.online_convnet(self.state_ph,
                                             self.num_quantile_samples)
     # Shape of self._net_outputs.quantile_values:
     # num_quantile_samples x num_actions.
@@ -203,7 +203,7 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
 
 
 
-    self._replay_net_outputs, self._replay_net_pis = self.online_convnet(self._replay.states,
+    self._replay_net_outputs, self._replay_net_pis, _ = self.online_convnet(self._replay.states,
                                                    self.num_tau_samples)
     # Shape: (num_tau_samples x batch_size) x num_actions.
     self._replay_net_quantile_values = self._replay_net_outputs.quantile_values
@@ -213,7 +213,7 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
     print("REPLAY PI SHAPE:", self._replay_net_pis)
     self.loss_pi = tf.losses.softmax_cross_entropy(self.target_pis, self._replay_net_pis)
     # Do the same for next states in the replay buffer.
-    self._replay_net_target_outputs, _ = self.target_convnet(
+    self._replay_net_target_outputs, _, _ = self.target_convnet(
         self._replay.next_states, self.num_tau_prime_samples)
     # Shape: (num_tau_prime_samples x batch_size) x num_actions.
     vals = self._replay_net_target_outputs.quantile_values
@@ -222,10 +222,10 @@ class ImplicitQuantileAgent(rainbow_agent.RainbowAgent):
     # Compute Q-values which are used for action selection for the next states
     # in the replay buffer. Compute the argmax over the Q-values.
     if self.double_dqn:
-      outputs_action, _ = self.online_convnet(self._replay.next_states,
+      outputs_action, _, _ = self.online_convnet(self._replay.next_states,
                                            self.num_quantile_samples)
     else:
-      outputs_action, _ = self.target_convnet(self._replay.next_states,
+      outputs_action, _, _ = self.target_convnet(self._replay.next_states,
                                            self.num_quantile_samples)
 
     # Shape: (num_quantile_samples x batch_size) x num_actions.

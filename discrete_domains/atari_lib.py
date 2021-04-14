@@ -270,7 +270,8 @@ def implicit_quantile_network(num_actions, quantile_embedding_dim,
                                       kernel_initializer=weights_initializer, activation=None)
   print("PI2 SHAPE", pi.shape)
   return network_type(quantile_values=quantile_values, quantiles=quantiles),\
-    pi
+    pi,\
+    v
 def fqf_network(num_actions, quantile_embedding_dim,
                               network_type, state, num_quantiles, runtype='fqf'):
   """The FQF ConvNet.
